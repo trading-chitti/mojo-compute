@@ -2,7 +2,7 @@
 name = "trading-chitti-mojo-compute"
 version = "0.1.0"
 description = "High-performance compute service using Mojo for trading-chitti"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
@@ -28,8 +28,20 @@ build-backend = "setuptools.build_meta"
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py39"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.9"
 strict = true
+
+[tool.pixi.workspace]
+channels = ["https://conda.modular.com/max", "conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+trading-chitti-mojo-compute = { path = ".", editable = true }
+
+[tool.pixi.dependencies]
+max = ">=25.5.0,<27"
+mojo = ">=0.25.7,<0.27"
+numpy = ">=1.24,<2.3"
