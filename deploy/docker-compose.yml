@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  mojo-compute:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: mojo-compute
+    restart: unless-stopped
+
+    volumes:
+      # Socket directory for IPC
+      - mojo-socket:/var/run/mojo-compute
+      # Logs
+      - mojo-logs:/var/log/mojo-compute
+
+    environment:
+      - SOCKET_PATH=/var/run/mojo-compute/mojo-compute.sock
+      - LOG_LEVEL=INFO
+
+    healthcheck:
+      test: ["CMD", "python3", "/app/deploy/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  mojo-socket:
+    driver: local
+  mojo-logs:
+    driver: local

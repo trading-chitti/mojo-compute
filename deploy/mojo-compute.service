@@ -1,0 +1,44 @@
+[Unit]
+Description=Mojo Compute Service - High-Performance Technical Indicators
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trading-chitti
+Group=trading-chitti
+WorkingDirectory=/opt/trading-chitti/mojo-compute
+
+# Environment
+Environment="PATH=/opt/mojo/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="SOCKET_PATH=/var/run/mojo-compute/mojo-compute.sock"
+
+# Start the service
+ExecStartPre=/bin/mkdir -p /var/run/mojo-compute
+ExecStartPre=/bin/chown trading-chitti:trading-chitti /var/run/mojo-compute
+ExecStart=/usr/bin/python3 /opt/trading-chitti/mojo-compute/server.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/run/mojo-compute /var/log/mojo-compute
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mojo-compute
+
+[Install]
+WantedBy=multi-user.target
