@@ -72,7 +72,8 @@ class BERTSentimentMAX:
         print(f"   Device: {self.device}")
         print(f"   Mode: {mode}")
 
-        self.sentiment_labels = ['negative', 'neutral', 'positive']
+        # FinBERT label mapping (from model.config.id2label)
+        self.sentiment_labels = ['positive', 'negative', 'neutral']
 
     def _apply_optimizations(self):
         """
