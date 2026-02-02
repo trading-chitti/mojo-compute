@@ -50,20 +50,28 @@ class MojoComputeServer:
       client_socket, _ = await loop.sock_accept(self.server_socket)
       asyncio.create_task(self.handle_client(client_socket))
 
+  async def recv_exact(self, loop, client_socket: socket.socket, n: int) -> bytes:
+    """Receive exactly n bytes from socket, handling partial reads."""
+    data = b''
+    while len(data) < n:
+      chunk = await loop.sock_recv(client_socket, n - len(data))
+      if not chunk:
+        raise ConnectionError("Socket closed before receiving all data")
+      data += chunk
+    return data
+
   async def handle_client(self, client_socket: socket.socket):
     """Handle a client connection."""
     try:
       loop = asyncio.get_event_loop()
 
-      # Receive length prefix (4 bytes, big-endian)
-      length_bytes = await loop.sock_recv(client_socket, 4)
-      if not length_bytes:
-        return
+      # Receive length prefix (4 bytes, big-endian) - ensure complete read
+      length_bytes = await self.recv_exact(loop, client_socket, 4)
 
       request_length = struct.unpack(">I", length_bytes)[0]
 
-      # Receive request JSON
-      request_bytes = await loop.sock_recv(client_socket, request_length)
+      # Receive request JSON - ensure complete read
+      request_bytes = await self.recv_exact(loop, client_socket, request_length)
       request_json = request_bytes.decode("utf-8")
       request = json.loads(request_json)
 
