@@ -4,6 +4,9 @@ Mojo Compute Socket Server
 
 Listens on Unix socket and processes indicator requests.
 Calls Mojo-implemented indicators for maximum performance.
+Includes automated schedulers for:
+- NSE Bhavcopy downloads (daily at 6 PM IST)
+- ML Predictions (daily after market close)
 """
 
 import asyncio
@@ -12,37 +15,58 @@ import os
 import socket
 import struct
 import sys
+import logging
 from pathlib import Path
 from typing import Any, Dict
 
 # Add src to path for importing indicators module
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-SOCKET_PATH = "/tmp/mojo-compute.sock"
+# Import schedulers
+try:
+    from mojo_compute.market_data.bhavcopy_scheduler import BhavcopyScheduler
+    BHAVCOPY_SCHEDULER_AVAILABLE = True
+    logging.info("✅ Bhavcopy scheduler available")
+except ImportError as e:
+    BHAVCOPY_SCHEDULER_AVAILABLE = False
+    logging.warning(f"⚠️ Bhavcopy scheduler not available: {e}")
+
+try:
+    from mojo_compute.ml.predictions_scheduler import PredictionsScheduler
+    PREDICTIONS_SCHEDULER_AVAILABLE = True
+    logging.info("✅ Predictions scheduler available")
+except ImportError as e:
+    PREDICTIONS_SCHEDULER_AVAILABLE = False
+    logging.warning(f"⚠️ Predictions scheduler not available: {e}")
+
+TCP_HOST = os.getenv("MOJO_COMPUTE_HOST", "0.0.0.0")
+TCP_PORT = int(os.getenv("MOJO_COMPUTE_PORT", "6101"))
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 class MojoComputeServer:
-  """Unix socket server for Mojo compute service."""
+  """TCP socket server for Mojo compute service."""
 
-  def __init__(self, socket_path: str = SOCKET_PATH):
-    self.socket_path = socket_path
+  def __init__(self, host: str = TCP_HOST, port: int = TCP_PORT):
+    self.host = host
+    self.port = port
     self.server_socket = None
 
   async def start(self):
-    """Start the Unix socket server."""
-    # Remove existing socket file
-    if os.path.exists(self.socket_path):
-      os.unlink(self.socket_path)
-
-    self.server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    self.server_socket.bind(self.socket_path)
+    """Start the TCP socket server."""
+    self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    self.server_socket.bind((self.host, self.port))
     self.server_socket.listen(5)
     self.server_socket.setblocking(False)
 
-    # Set socket permissions to allow core-api to connect
-    os.chmod(self.socket_path, 0o666)
-
-    print(f"🚀 Mojo Compute Server listening on {self.socket_path}")
+    print(f"🚀 Mojo Compute Server listening on {self.host}:{self.port}")
 
     loop = asyncio.get_event_loop()
 
@@ -336,14 +360,57 @@ class MojoComputeServer:
 
 async def main():
   """Main entry point."""
+  logger.info("=" * 70)
+  logger.info("🚀 MOJO COMPUTE SERVICE STARTING")
+  logger.info("=" * 70)
+
   server = MojoComputeServer()
+
+  # Start Bhavcopy scheduler if available
+  bhavcopy_scheduler = None
+  bhavcopy_task = None
+  if BHAVCOPY_SCHEDULER_AVAILABLE:
+    bhavcopy_scheduler = BhavcopyScheduler()
+    bhavcopy_task = asyncio.create_task(bhavcopy_scheduler.run())
+    logger.info("✅ Bhavcopy scheduler started (downloads daily at 6 PM IST)")
+
+  # Start predictions scheduler if available
+  predictions_scheduler = None
+  predictions_task = None
+  if PREDICTIONS_SCHEDULER_AVAILABLE:
+    predictions_scheduler = PredictionsScheduler()
+    predictions_task = asyncio.create_task(predictions_scheduler.run())
+    logger.info("✅ Predictions scheduler started (generates daily at 4 PM IST)")
+
+  logger.info("=" * 70)
+  logger.info("✅ ALL SCHEDULERS RUNNING")
+  logger.info("=" * 70)
+
   try:
     await server.start()
   except KeyboardInterrupt:
     print("\n🛑 Server stopped")
   finally:
-    if os.path.exists(SOCKET_PATH):
-      os.unlink(SOCKET_PATH)
+    # Stop schedulers
+    if bhavcopy_scheduler:
+      bhavcopy_scheduler.stop()
+    if bhavcopy_task:
+      bhavcopy_task.cancel()
+      try:
+        await bhavcopy_task
+      except asyncio.CancelledError:
+        pass
+
+    if predictions_scheduler:
+      predictions_scheduler.stop()
+    if predictions_task:
+      predictions_task.cancel()
+      try:
+        await predictions_task
+      except asyncio.CancelledError:
+        pass
+
+    # Cleanup: TCP sockets don't need file cleanup
 
 
 if __name__ == "__main__":

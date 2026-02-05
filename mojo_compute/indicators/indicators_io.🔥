@@ -1,0 +1,221 @@
+"""
+Technical Indicators - File I/O Version for Subprocess Integration
+Reads binary data from file, calculates indicators, writes binary results
+"""
+
+from python import Python
+from math import sqrt
+from sys import argv
+
+
+fn rsi(prices: List[Float64], period: Int = 14) raises -> List[Float64]:
+    """Calculate RSI."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period >= n:
+        return result^
+
+    var gains = List[Float64](capacity=n-1)
+    var losses = List[Float64](capacity=n-1)
+
+    for i in range(1, n):
+        var change = prices[i] - prices[i - 1]
+        if change > 0:
+            gains.append(change)
+            losses.append(0.0)
+        else:
+            gains.append(0.0)
+            losses.append(-change)
+
+    var avg_gain: Float64 = 0.0
+    var avg_loss: Float64 = 0.0
+
+    for i in range(period):
+        avg_gain += gains[i]
+        avg_loss += losses[i]
+
+    avg_gain /= Float64(period)
+    avg_loss /= Float64(period)
+
+    if avg_loss == 0:
+        result[period] = 100.0
+    else:
+        var rs = avg_gain / avg_loss
+        result[period] = 100.0 - (100.0 / (1.0 + rs))
+
+    for i in range(period + 1, n):
+        avg_gain = (avg_gain * Float64(period - 1) + gains[i - 1]) / Float64(period)
+        avg_loss = (avg_loss * Float64(period - 1) + losses[i - 1]) / Float64(period)
+
+        if avg_loss == 0:
+            result[i] = 100.0
+        else:
+            var rs = avg_gain / avg_loss
+            result[i] = 100.0 - (100.0 / (1.0 + rs))
+
+    return result^
+
+
+fn ema(prices: List[Float64], period: Int) raises -> List[Float64]:
+    """Calculate EMA."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period > n:
+        return result^
+
+    var multiplier = 2.0 / Float64(period + 1)
+    var sum: Float64 = 0.0
+
+    for i in range(period):
+        sum += prices[i]
+    var initial_ema = sum / Float64(period)
+    result[period - 1] = initial_ema
+
+    var prev_ema = initial_ema
+    for i in range(period, n):
+        var current_ema = (prices[i] - prev_ema) * multiplier + prev_ema
+        result[i] = current_ema
+        prev_ema = current_ema
+
+    return result^
+
+
+fn sma(prices: List[Float64], period: Int) raises -> List[Float64]:
+    """Calculate SMA."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period > n:
+        return result^
+
+    var sum: Float64 = 0.0
+    for i in range(period):
+        sum += prices[i]
+    result[period - 1] = sum / Float64(period)
+
+    for i in range(period, n):
+        sum = sum - prices[i - period] + prices[i]
+        result[i] = sum / Float64(period)
+
+    return result^
+
+
+fn read_prices_text(filename: String) raises -> List[Float64]:
+    """Read prices from text file (one per line)."""
+    var prices = List[Float64]()
+
+    try:
+        var py = Python.import_module("builtins")
+
+        # Read file using Python
+        var f = py.open(filename, "r")
+        var lines = f.readlines()
+        _ = f.close()
+
+        # Parse each line
+        for i in range(len(lines)):
+            var line = String(lines[i]).strip()
+            if line:
+                try:
+                    var val = py.float(line)
+                    # Convert to Float64
+                    prices.append(Float64(py=val))
+                except:
+                    pass
+
+        return prices^
+    except:
+        return prices^
+
+
+fn write_results_text(filename: String, results: List[Float64]) raises:
+    """Write results to text file (one per line)."""
+    try:
+        var py = Python.import_module("builtins")
+
+        var f = py.open(filename, "w")
+        for i in range(len(results)):
+            var line = String(results[i]) + "\n"
+            _ = f.write(line)
+        _ = f.close()
+    except:
+        pass
+
+
+fn main() raises:
+    """
+    CLI for subprocess integration.
+
+    Usage: ./indicators_io <indicator> <input_file> <output_file> [period]
+
+    Example: ./indicators_io rsi prices.txt results.txt 14
+    """
+    var args = argv()
+
+    if len(args) < 4:
+        print("Usage: indicators_io <indicator> <input_file> <output_file> [period]")
+        print("")
+        print("Indicators:")
+        print("  rsi <input> <output> [period=14]")
+        print("  ema <input> <output> <period>")
+        print("  sma <input> <output> <period>")
+        print("")
+        print("Input file: text file with one price per line")
+        print("Output file: text file with one result per line")
+        return
+
+    var indicator = String(args[1])
+    var input_file = String(args[2])
+    var output_file = String(args[3])
+
+    # Read prices
+    var prices = read_prices_text(input_file)
+
+    if len(prices) == 0:
+        print("Error: No prices read from", input_file)
+        return
+
+    # Calculate indicator
+    var result: List[Float64]
+
+    if indicator == "rsi":
+        var period = 14
+        if len(args) >= 5:
+            period = atol(String(args[4]))
+        result = rsi(prices, period)
+
+    elif indicator == "ema":
+        if len(args) < 5:
+            print("Error: EMA requires period argument")
+            return
+        var period = atol(String(args[4]))
+        result = ema(prices, period)
+
+    elif indicator == "sma":
+        if len(args) < 5:
+            print("Error: SMA requires period argument")
+            return
+        var period = atol(String(args[4]))
+        result = sma(prices, period)
+
+    else:
+        print("Error: Unknown indicator:", indicator)
+        print("Available: rsi, ema, sma")
+        return
+
+    # Write results
+    write_results_text(output_file, result)
+
+    print("✅ Calculated", indicator, "for", len(prices), "prices")
+    print("📊 Results written to", output_file)

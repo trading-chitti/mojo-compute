@@ -1,19 +1,4 @@
-"""
-Machine Learning module for price predictions.
+"""ML prediction module"""
+from .predictor import StockPredictor, predict_top_movers
 
-This module provides:
-- Feature engineering pipeline
-- Model training (Random Forest, XGBoost, LightGBM)
-- Inference engine
-- Model drift detection
-"""
-
-from .features import FeatureEngineer
-from .trainer import ModelTrainer
-from .predictor import Predictor
-
-__all__ = [
-    'FeatureEngineer',
-    'ModelTrainer',
-    'Predictor',
-]
+__all__ = ['StockPredictor', 'predict_top_movers']

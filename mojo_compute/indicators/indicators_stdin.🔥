@@ -1,0 +1,96 @@
+"""
+Technical Indicators - Stdin/Stdout Version
+Reads prices from stdin, writes results to stdout
+Simple text protocol for subprocess integration
+"""
+
+from python import Python
+from math import sqrt
+
+
+fn rsi(prices: List[Float64], period: Int = 14) raises -> List[Float64]:
+    """Calculate RSI."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period >= n:
+        return result^
+
+    var gains = List[Float64](capacity=n-1)
+    var losses = List[Float64](capacity=n-1)
+
+    for i in range(1, n):
+        var change = prices[i] - prices[i - 1]
+        if change > 0:
+            gains.append(change)
+            losses.append(0.0)
+        else:
+            gains.append(0.0)
+            losses.append(-change)
+
+    var avg_gain: Float64 = 0.0
+    var avg_loss: Float64 = 0.0
+
+    for i in range(period):
+        avg_gain += gains[i]
+        avg_loss += losses[i]
+
+    avg_gain /= Float64(period)
+    avg_loss /= Float64(period)
+
+    if avg_loss == 0:
+        result[period] = 100.0
+    else:
+        var rs = avg_gain / avg_loss
+        result[period] = 100.0 - (100.0 / (1.0 + rs))
+
+    for i in range(period + 1, n):
+        avg_gain = (avg_gain * Float64(period - 1) + gains[i - 1]) / Float64(period)
+        avg_loss = (avg_loss * Float64(period - 1) + losses[i - 1]) / Float64(period)
+
+        if avg_loss == 0:
+            result[i] = 100.0
+        else:
+            var rs = avg_gain / avg_loss
+            result[i] = 100.0 - (100.0 / (1.0 + rs))
+
+    return result^
+
+
+fn main() raises:
+    """
+    Read prices from stdin (one per line), calculate RSI, write to stdout.
+
+    Usage: echo -e "100\n102\n101\n..." | ./indicators_stdin
+    """
+
+    var py = Python.import_module("builtins")
+    var sys = Python.import_module("sys")
+
+    # Read all lines from stdin
+    var input_text = sys.stdin.read()
+    var lines = input_text.strip().split('\n')
+
+    # Parse prices
+    var prices = List[Float64]()
+    for i in range(len(lines)):
+        var line = lines[i].strip()
+        if line:
+            try:
+                var val = py.float(line)
+                # Try to convert - this might fail
+                var price = Float64(py=val)
+                prices.append(price)
+            except:
+                # Skip invalid lines
+                pass
+
+    # Calculate RSI
+    var result = rsi(prices, 14)
+
+    # Output results (one per line)
+    for i in range(len(result)):
+        print(result[i])

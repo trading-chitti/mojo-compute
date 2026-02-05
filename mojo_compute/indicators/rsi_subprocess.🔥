@@ -1,0 +1,205 @@
+"""
+RSI Indicator - Subprocess Integration
+Accepts prices via stdin, outputs results to stdout for Python integration
+"""
+
+from math import sqrt
+from sys import argv
+
+
+fn rsi(prices: List[Float64], period: Int = 14) raises -> List[Float64]:
+    """Calculate RSI in Mojo (internal function)."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    # Initialize with zeros
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period >= n:
+        return result^
+
+    # Calculate price changes
+    var gains = List[Float64](capacity=n-1)
+    var losses = List[Float64](capacity=n-1)
+
+    for i in range(1, n):
+        var change = prices[i] - prices[i - 1]
+        if change > 0:
+            gains.append(change)
+            losses.append(0.0)
+        else:
+            gains.append(0.0)
+            losses.append(-change)
+
+    # Calculate initial average gain/loss
+    var avg_gain: Float64 = 0.0
+    var avg_loss: Float64 = 0.0
+
+    for i in range(period):
+        avg_gain += gains[i]
+        avg_loss += losses[i]
+
+    avg_gain /= Float64(period)
+    avg_loss /= Float64(period)
+
+    # Calculate RSI for first period
+    if avg_loss == 0:
+        result[period] = 100.0
+    else:
+        var rs = avg_gain / avg_loss
+        result[period] = 100.0 - (100.0 / (1.0 + rs))
+
+    # Calculate RSI for remaining periods
+    for i in range(period + 1, n):
+        avg_gain = (avg_gain * Float64(period - 1) + gains[i - 1]) / Float64(period)
+        avg_loss = (avg_loss * Float64(period - 1) + losses[i - 1]) / Float64(period)
+
+        if avg_loss == 0:
+            result[i] = 100.0
+        else:
+            var rs = avg_gain / avg_loss
+            result[i] = 100.0 - (100.0 / (1.0 + rs))
+
+    return result^
+
+
+fn ema(prices: List[Float64], period: Int) raises -> List[Float64]:
+    """Calculate EMA in Mojo (internal function)."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period > n:
+        return result^
+
+    var multiplier = 2.0 / Float64(period + 1)
+
+    # Start with SMA for first value
+    var sum: Float64 = 0.0
+    for i in range(period):
+        sum += prices[i]
+    var initial_ema = sum / Float64(period)
+    result[period - 1] = initial_ema
+
+    # Calculate EMA
+    var prev_ema = initial_ema
+    for i in range(period, n):
+        var current_ema = (prices[i] - prev_ema) * multiplier + prev_ema
+        result[i] = current_ema
+        prev_ema = current_ema
+
+    return result^
+
+
+fn sma(prices: List[Float64], period: Int) raises -> List[Float64]:
+    """Calculate SMA in Mojo (internal function)."""
+    var n = len(prices)
+    var result = List[Float64](capacity=n)
+
+    for _ in range(n):
+        result.append(0.0)
+
+    if period <= 0 or period > n:
+        return result^
+
+    # Calculate first SMA
+    var sum: Float64 = 0.0
+    for i in range(period):
+        sum += prices[i]
+    result[period - 1] = sum / Float64(period)
+
+    # Calculate remaining SMAs using sliding window
+    for i in range(period, n):
+        sum = sum - prices[i - period] + prices[i]
+        result[i] = sum / Float64(period)
+
+    return result^
+
+
+fn parse_prices_from_stdin() raises -> List[Float64]:
+    """Read prices from stdin (one per line)."""
+    var prices = List[Float64]()
+
+    # In Mojo 0.26.2, we'll read from stdin using Python module
+    try:
+        var py = Python.import_module("builtins")
+        var sys = Python.import_module("sys")
+
+        var lines = sys.stdin.read().strip().split('\n')
+        var n = lines.__len__()
+
+        for i in range(n):
+            var line = lines[i].strip()
+            if line:
+                var val = py.float(line)
+                prices.append(Float64(atof(str(val))))
+
+        return prices^
+    except:
+        print("Error reading stdin")
+        return prices^
+
+
+fn main() raises:
+    """
+    Main function for subprocess integration.
+
+    Usage:
+        echo "100.0\n102.0\n101.0" | ./rsi_subprocess rsi 14
+        echo "100.0\n102.0\n101.0" | ./rsi_subprocess ema 9
+        echo "100.0\n102.0\n101.0" | ./rsi_subprocess sma 5
+    """
+
+    # Parse command-line arguments
+    var args = argv()
+    var argc = len(args)
+
+    if argc < 2:
+        print("Usage: rsi_subprocess <indicator> [period]")
+        print("  indicator: rsi, ema, sma")
+        print("  period: optional, defaults per indicator")
+        print("")
+        print("Input: prices via stdin (one per line)")
+        print("Output: results to stdout (one per line)")
+        return
+
+    var indicator = str(args[1])
+    var period: Int = 14  # Default
+
+    if argc >= 3:
+        period = atol(str(args[2]))
+
+    # Read prices from stdin
+    print("Reading prices from stdin...")
+    var prices = parse_prices_from_stdin()
+    var n = len(prices)
+
+    if n == 0:
+        print("Error: No prices provided")
+        return
+
+    print("Received", n, "prices")
+
+    # Calculate indicator
+    var result: List[Float64]
+
+    if indicator == "rsi":
+        print("Calculating RSI with period", period)
+        result = rsi(prices, period)
+    elif indicator == "ema":
+        print("Calculating EMA with period", period)
+        result = ema(prices, period)
+    elif indicator == "sma":
+        print("Calculating SMA with period", period)
+        result = sma(prices, period)
+    else:
+        print("Unknown indicator:", indicator)
+        return
+
+    # Output results (one per line)
+    print("Results:")
+    for i in range(len(result)):
+        print(result[i])
